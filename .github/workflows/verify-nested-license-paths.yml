@@ -1,0 +1,35 @@
+name: Verify packaged license paths
+on:
+  push:
+    branches: [verify-nested-license-paths]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    name: Full suite on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fcfa5f2ec2ffb83405ed610937b59f8cccb04c88
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - run: python -m pip install ".[cli]" -r tests/requirements.txt
+      - run: python -m pytest --pspec -q --junitxml=results.xml
+      - name: Check both distribution regressions were exercised
+        run: >-
+          python -c "import xml.etree.ElementTree as ET;
+          cases = ET.parse('results.xml').findall('.//testcase');
+          assert len(cases) == 50, len(cases);
+          assert {c.attrib['name'] for c in cases if 'license_files' in c.attrib['classname']}
+          >= {'test_prepared_metadata_preserves_license_paths', 'test_sdist_includes_declared_untracked_licenses'};
+          assert all(len(c) == 0 for c in cases)"
